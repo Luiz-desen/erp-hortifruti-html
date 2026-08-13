@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fiscal (MG) - ERP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <script src="app.js"></script>
+  <script src="layout.js"></script>
+  <script>
+    renderLayout('fiscal');
+    const main = document.getElementById('main');
+
+    main.innerHTML = `
+      <h2>Módulo Fiscal (MG) - Placeholder</h2>
+      <div class="card">
+        <p class="muted">
+          Aqui você conectará a emissão de <strong>NFC-e/NF-e</strong> para <strong>Minas Gerais (MG)</strong>
+          via SEFAZ, certificado, séries/numeração, contingência e armazenamento de XML.
+        </p>
+
+        <div class="split">
+          <div class="card">
+            <h3>Últimas emissões (simuladas)</h3>
+            <table>
+              <thead><tr><th>Venda</th><th>Data</th><th class="right">Total</th><th>Status</th></tr></thead>
+              <tbody id="fiscalTable"></tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <h3>Configuração</h3>
+            <label>UF</label>
+            <input value="MG" disabled />
+            <label style="margin-top:10px;">Modelo</label>
+            <select disabled>
+              <option>NFC-e (65)</option>
+              <option>NF-e (55)</option>
+            </select>
+            <label style="margin-top:10px;">Certificado</label>
+            <input placeholder="A1 (arquivo .pfx) / A3 (token)" disabled />
+            <button class="btn" style="margin-top:10px;" disabled>Salvar (precisa backend)</button>
+
+            <p class="muted" style="font-size:12px; margin-top:10px;">
+              No Node.js: fazer emissão assíncrona (fila), outbox, retentativas e contingência.
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    function render(){
+      const db = ERP.load();
+      const rows = db.sales.slice(0,12).map(s=>`
+        <tr>
+          <td><span class="tag">${s.id.slice(0,10)}...</span></td>
+          <td>${new Date(s.at).toLocaleString('pt-BR')}</td>
+          <td class="right">${ERP.fmtBRL(s.total)}</td>
+          <td>${s.fiscal_status || '-'}</td>
+        </tr>
+      `).join('');
+      document.getElementById('fiscalTable').innerHTML = rows || `<tr><td colspan="4" class="muted">Sem vendas.</td></tr>`;
+    }
+    render();
+  </script>
+</body>
+</html>

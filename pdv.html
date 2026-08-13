@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PDV - ERP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <script src="app.js"></script>
+  <script src="layout.js"></script>
+  <script>
+    renderLayout('pos');
+    const main = document.getElementById('main');
+
+    main.innerHTML = `
+      <h2>PDV</h2>
+      <div class="split">
+        <div class="card">
+          <h3>Adicionar item</h3>
+          <div class="split">
+            <div>
+              <label>Buscar produto</label>
+              <input id="posQuery" placeholder="SKU/descrição/cód. barras..." />
+            </div>
+            <div>
+              <label>Qtd</label>
+              <input id="posQty" type="number" step="0.001" value="1" />
+            </div>
+          </div>
+
+          <div style="margin-top:10px">
+            <label>Resultados</label>
+            <select id="posResults" size="7" style="height:160px"></select>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <button class="btn ok" id="btnAdd">Adicionar ao carrinho</button>
+            <button class="btn" id="btnSuggest">Sugestões (IA mock)</button>
+          </div>
+
+          <p class="muted" style="font-size:12px;">
+            No futuro: enviar itens do carrinho ao Node.js → GPT Maker e retornar complementares.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>Carrinho</h3>
+          <table>
+            <thead><tr><th>Item</th><th class="right">Qtd</th><th class="right">Preço</th><th class="right">Total</th><th></th></tr></thead>
+            <tbody id="cartTable"></tbody>
+          </table>
+
+          <div class="row" style="justify-content:space-between; margin-top:10px">
+            <div class="muted">Pagamento</div>
+            <select id="payMethod" style="max-width:200px">
+              <option value="DINHEIRO">Dinheiro</option>
+              <option value="PIX">PIX</option>
+              <option value="CREDITO">Crédito</option>
+              <option value="DEBITO">Débito</option>
+            </select>
+          </div>
+
+          <div class="row" style="justify-content:space-between; margin-top:10px">
+            <div style="font-size:18px"><strong>Total:</strong></div>
+            <div style="font-size:18px" id="cartTotal">R$ 0,00</div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <button class="btn ok" id="btnCheckout">Finalizar venda</button>
+            <button class="btn bad" id="btnClear">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    function posSearch(){
+      const db = ERP.load();
+      const q = (document.getElementById('posQuery').value||'').toLowerCase();
+      const results = db.products
+        .filter(p=> (`${p.sku} ${p.barcode} ${p.desc}`.toLowerCase()).includes(q))
+        .slice(0, 40);
+
+      document.getElementById('posResults').innerHTML =
+        results.map(p=>`<option value="${p.id}">${p.sku} • ${p.desc} • ${ERP.fmtBRL(p.price)}</option>`).join('');
+    }
+
+    function renderCart(){
+      const db = ERP.load();
+      const rows = db.cart.map(i=>`
+        <tr>
+          <td>${i.desc}</td>
+          <td class="right">${i.qty}</td>
+          <td class="right">${ERP.fmtBRL(i.unit_price)}</td>
+          <td class="right">${ERP.fmtBRL(i.qty*i.unit_price)}</td>
+          <td class="right"><button class="btn bad" onclick="__rm('${i.id}')">X</button></td>
+        </tr>
+      `).join('');
+      document.getElementById('cartTable').innerHTML = rows || `<tr><td colspan="5" class="muted">Carrinho vazio.</td></tr>`;
+      const total = db.cart.reduce((s,i)=> s + i.qty*i.unit_price, 0);
+      document.getElementById('cartTotal').textContent = ERP.fmtBRL(total);
+    }
+
+    function addToCart(){
+      const db = ERP.load();
+      const id = document.getElementById('posResults').value;
+      const qty = Number(document.getElementById('posQty').value || 1);
+      const p = db.products.find(x=>x.id===id);
+      if(!p){ ERP.toast("Selecione um produto."); return; }
+      if(qty<=0){ ERP.toast("Qtd inválida."); return; }
+
+      const line = db.cart.find(i=>i.product_id===p.id);
+      if(line) line.qty += qty;
+      else db.cart.push({ id: ERP.uid('cart'), product_id: p.id, desc: p.desc, qty, unit_price: p.price });
+
+      ERP.save(db);
+      ERP.toast("Item adicionado.");
+      renderCart();
+    }
+
+    function rm(id){
+      const db = ERP.load();
+      db.cart = db.cart.filter(i=>i.id!==id);
+      ERP.save(db);
+      renderCart();
+    }
+    window.__rm = rm;
+
+    function checkout(){
+      const db = ERP.load();
+      if(!db.cart.length){ ERP.toast("Carrinho vazio."); return; }
+
+      // baixa estoque simples
+      for(const item of db.cart){
+        const p = db.products.find(x=>x.id===item.product_id);
+        if(p) p.stock = Number((p.stock - item.qty).toFixed(3));
+      }
+
+      const total = db.cart.reduce((s,i)=> s + i.qty*i.unit_price, 0);
+      const sale = {
+        id: ERP.uid('sale'),
+        at: new Date().toISOString(),
+        items: db.cart.map(x=>({...x})),
+        total,
+        pay: document.getElementById('payMethod').value,
+        fiscal_status: "PENDENTE (MG)"
+      };
+      db.sales.unshift(sale);
+      db.cart = [];
+      ERP.save(db);
+
+      ERP.toast("Venda finalizada (fiscal pendente - placeholder).");
+      renderCart();
+
+      // simula autorização fiscal
+      setTimeout(()=>{
+        const db2 = ERP.load();
+        const s = db2.sales.find(x=>x.id===sale.id);
+        if(s){ s.fiscal_status = "AUTORIZADA (mock)"; ERP.save(db2); }
+        ERP.toast("Fiscal MG: autorizado (mock).");
+      }, 1500);
+    }
+
+    document.getElementById('posQuery').oninput = posSearch;
+    document.getElementById('btnAdd').onclick = addToCart;
+    document.getElementById('btnClear').onclick = ()=>{
+      const db = ERP.load(); db.cart=[]; ERP.save(db);
+      ERP.toast("Carrinho limpo.");
+      renderCart();
+    };
+    document.getElementById('btnCheckout').onclick = checkout;
+    document.getElementById('btnSuggest').onclick = ()=> ERP.toast("Sugestão (mock): sacola, limão, água, ovos, temperos.");
+
+    ERP.seedIfEmpty();
+    posSearch();
+    renderCart();
+  </script>
+</body>
+</html>

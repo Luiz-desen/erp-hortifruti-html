@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dashboard - ERP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <script src="app.js"></script>
+  <script src="layout.js"></script>
+  <script>
+    renderLayout('dash');
+
+    const main = document.getElementById('main');
+    main.innerHTML = `
+      <h2>Dashboard</h2>
+      <div class="row">
+        <div class="card kpi">
+          <div class="label">Vendas hoje</div>
+          <div class="value" id="kpiSales">R$ 0,00</div>
+          <div class="hint" id="kpiTickets">0 tickets</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">Itens em estoque mínimo</div>
+          <div class="value" id="kpiLow">0</div>
+          <div class="hint">Repor produtos críticos</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">Produtos cadastrados</div>
+          <div class="value" id="kpiProducts">0</div>
+          <div class="hint">Inclui pesáveis e não pesáveis</div>
+        </div>
+      </div>
+
+      <div class="split" style="margin-top:12px;">
+        <div class="card">
+          <h3>Últimas vendas</h3>
+          <table>
+            <thead><tr><th>Data</th><th>Itens</th><th class="right">Total</th></tr></thead>
+            <tbody id="lastSales"></tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Alertas</h3>
+          <div id="alerts" class="muted">Sem alertas.</div>
+        </div>
+      </div>
+    `;
+
+    function render(){
+      const db = ERP.load();
+      const today = new Date().toISOString().slice(0,10);
+      const todays = db.sales.filter(s=>s.at.slice(0,10)===today);
+      const total = todays.reduce((a,s)=>a+s.total,0);
+
+      document.getElementById('kpiSales').textContent = ERP.fmtBRL(total);
+      document.getElementById('kpiTickets').textContent = `${todays.length} tickets`;
+      document.getElementById('kpiLow').textContent = ERP.lowCount(db);
+      document.getElementById('kpiProducts').textContent = db.products.length;
+
+      document.getElementById('lastSales').innerHTML =
+        db.sales.slice(0,8).map(s=>`
+          <tr>
+            <td>${new Date(s.at).toLocaleString('pt-BR')}</td>
+            <td>${s.items.length} <span class="muted">(${s.fiscal_status})</span></td>
+            <td class="right">${ERP.fmtBRL(s.total)}</td>
+          </tr>
+        `).join('') || `<tr><td colspan="3" class="muted">Sem vendas.</td></tr>`;
+
+      const alerts = [];
+      const lows = db.products.filter(p=>p.stock < p.min);
+      if(lows.length) alerts.push(`<div class="status-bad">Abaixo do mínimo: ${lows.map(p=>p.sku).join(', ')}</div>`);
+      const exp = db.products.filter(p=>ERP.expirySoon(p,7));
+      if(exp.length) alerts.push(`<div class="status-warn">Validade próxima (<= 7 dias): ${exp.map(p=>p.sku).join(', ')}</div>`);
+      document.getElementById('alerts').innerHTML = alerts.join('<br/>') || `Sem alertas.`;
+    }
+    render();
+  </script>
+</body>
+</html>

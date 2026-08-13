@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Estoque - ERP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <script src="app.js"></script>
+  <script src="layout.js"></script>
+  <script>
+    renderLayout('stock');
+    const main = document.getElementById('main');
+
+    main.innerHTML = `
+      <h2>Estoque</h2>
+      <div class="card">
+        <div class="toolbar">
+          <div class="filters">
+            <div>
+              <label>Filtro</label>
+              <select id="stockFilter">
+                <option value="all">Todos</option>
+                <option value="low">Somente abaixo do mínimo</option>
+                <option value="expiry">Com validade próxima (<= 7 dias)</option>
+              </select>
+            </div>
+          </div>
+          <div class="filters">
+            <button class="btn" id="btnRecalc">Recalcular alertas</button>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th><th>Produto</th><th>Validade</th>
+              <th class="right">Estoque</th><th class="right">Mínimo</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="stockTable"></tbody>
+        </table>
+      </div>
+    `;
+
+    function render(){
+      const db = ERP.load();
+      const filter = document.getElementById('stockFilter').value;
+      let items = [...db.products];
+      if(filter==='low') items = items.filter(p=>p.stock < p.min);
+      if(filter==='expiry') items = items.filter(p=>ERP.expirySoon(p,7));
+
+      const rows = items.map(p=>{
+        const isLow = p.stock < p.min;
+        const isExp = ERP.expirySoon(p,7);
+        let status = `<span class="status-ok">OK</span>`;
+        if(isLow) status = `<span class="status-bad">Abaixo do mínimo</span>`;
+        else if(isExp) status = `<span class="status-warn">Validade próxima</span>`;
+        return `
+          <tr>
+            <td><span class="tag">${p.sku}</span></td>
+            <td>${p.desc}<div class="muted" style="font-size:12px">${p.cat||'-'}</div></td>
+            <td>${p.exp ? p.exp : '<span class="muted">—</span>'}</td>
+            <td class="right">${p.stock}</td>
+            <td class="right">${p.min}</td>
+            <td>${status}</td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('stockTable').innerHTML = rows || `<tr><td colspan="6" class="muted">Sem itens.</td></tr>`;
+    }
+
+    document.getElementById('stockFilter').onchange = render;
+    document.getElementById('btnRecalc').onclick = ()=> { ERP.toast("Alertas recalculados."); render(); };
+
+    ERP.seedIfEmpty();
+    render();
+  </script>
+</body>
+</html>

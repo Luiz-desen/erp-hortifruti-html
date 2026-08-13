@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Produtos - ERP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <script src="app.js"></script>
+  <script src="layout.js"></script>
+  <script>
+    renderLayout('prod');
+    const main = document.getElementById('main');
+    main.innerHTML = `
+      <h2>Cadastro de Produtos</h2>
+
+      <div class="card">
+        <div class="toolbar">
+          <div class="filters">
+            <div>
+              <label>Buscar</label>
+              <input id="productSearch" placeholder="SKU, código de barras, descrição..." />
+            </div>
+          </div>
+          <div class="filters">
+            <button class="btn ok" id="btnSeed">Carregar exemplos</button>
+            <button class="btn" id="btnClearDB">Limpar base (local)</button>
+          </div>
+        </div>
+
+        <div class="split">
+          <div class="card">
+            <h3>Novo/Editar produto</h3>
+            <input type="hidden" id="p_id" />
+
+            <div class="split">
+              <div>
+                <label>SKU</label>
+                <input id="p_sku" placeholder="EX: TOM001" />
+              </div>
+              <div>
+                <label>Cód. barras</label>
+                <input id="p_barcode" placeholder="789..." />
+              </div>
+            </div>
+
+            <div style="margin-top:10px">
+              <label>Descrição</label>
+              <input id="p_desc" placeholder="Tomate, Banana prata..." />
+            </div>
+
+            <div class="split" style="margin-top:10px">
+              <div>
+                <label>Categoria</label>
+                <input id="p_cat" placeholder="Hortifruti / Mercearia..." />
+              </div>
+              <div>
+                <label>Unidade</label>
+                <select id="p_unit">
+                  <option value="UN">UN</option>
+                  <option value="KG">KG</option>
+                  <option value="CX">CX</option>
+                  <option value="LT">LT</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="split" style="margin-top:10px">
+              <div>
+                <label>Preço custo (R$)</label>
+                <input id="p_cost" type="number" step="0.01" />
+              </div>
+              <div>
+                <label>Preço venda (R$)</label>
+                <input id="p_price" type="number" step="0.01" />
+              </div>
+            </div>
+
+            <div class="split" style="margin-top:10px">
+              <div>
+                <label>Estoque atual</label>
+                <input id="p_stock" type="number" step="0.001" />
+              </div>
+              <div>
+                <label>Estoque mínimo</label>
+                <input id="p_min" type="number" step="0.001" />
+              </div>
+            </div>
+
+            <div style="margin-top:10px">
+              <label>Validade (opcional)</label>
+              <input id="p_exp" type="date" />
+            </div>
+
+            <div class="row" style="margin-top:12px">
+              <button class="btn ok" id="btnSave">Salvar</button>
+              <button class="btn bad" id="btnClear">Limpar</button>
+              <button class="btn" id="btnSuggest">Sugerir categoria (IA mock)</button>
+            </div>
+
+            <p class="muted" style="font-size:12px; margin-top:10px;">
+              Depois você troca o “mock” por chamada ao Node.js → GPT Maker.
+            </p>
+          </div>
+
+          <div class="card">
+            <h3>Produtos</h3>
+            <table>
+              <thead>
+                <tr><th>SKU</th><th>Descrição</th><th class="right">Preço</th><th class="right">Estoque</th><th></th></tr>
+              </thead>
+              <tbody id="productsTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+
+    function clearForm(){
+      ['p_id','p_sku','p_barcode','p_desc','p_cat','p_cost','p_price','p_stock','p_min','p_exp'].forEach(id=>document.getElementById(id).value='');
+      document.getElementById('p_unit').value='UN';
+    }
+
+    function suggestMock(){
+      const desc = (document.getElementById('p_desc').value || '').toLowerCase();
+      if(!desc){ ERP.toast("Digite uma descrição primeiro."); return; }
+      let cat = "Mercearia";
+      if(desc.includes("banana")||desc.includes("maçã")||desc.includes("maca")||desc.includes("mamão")||desc.includes("mamao")) cat="Hortifruti > Frutas";
+      if(desc.includes("tomate")||desc.includes("cebola")||desc.includes("alface")||desc.includes("batata")) cat="Hortifruti > Legumes/Verde";
+      if(desc.includes("leite")||desc.includes("iogurte")||desc.includes("queijo")) cat="Frios/Laticínios";
+      document.getElementById('p_cat').value = cat;
+      ERP.toast("Sugestão aplicada (mock).");
+    }
+
+    function save(){
+      const db = ERP.load();
+      const p = {
+        id: document.getElementById('p_id').value || ERP.uid('prod'),
+        sku: document.getElementById('p_sku').value.trim(),
+        barcode: document.getElementById('p_barcode').value.trim(),
+        desc: document.getElementById('p_desc').value.trim(),
+        cat: document.getElementById('p_cat').value.trim(),
+        unit: document.getElementById('p_unit').value,
+        cost: Number(document.getElementById('p_cost').value || 0),
+        price: Number(document.getElementById('p_price').value || 0),
+        stock: Number(document.getElementById('p_stock').value || 0),
+        min: Number(document.getElementById('p_min').value || 0),
+        exp: document.getElementById('p_exp').value || null
+      };
+      if(!p.sku || !p.desc){ ERP.toast("Preencha ao menos SKU e Descrição."); return; }
+      const idx = db.products.findIndex(x=>x.id===p.id);
+      if(idx>=0) db.products[idx]=p; else db.products.push(p);
+      ERP.save(db);
+      ERP.toast("Produto salvo.");
+      clearForm();
+      render();
+    }
+
+    function edit(id){
+      const db = ERP.load();
+      const p = db.products.find(x=>x.id===id);
+      if(!p) return;
+      document.getElementById('p_id').value=p.id;
+      document.getElementById('p_sku').value=p.sku;
+      document.getElementById('p_barcode').value=p.barcode;
+      document.getElementById('p_desc').value=p.desc;
+      document.getElementById('p_cat').value=p.cat;
+      document.getElementById('p_unit').value=p.unit;
+      document.getElementById('p_cost').value=p.cost;
+      document.getElementById('p_price').value=p.price;
+      document.getElementById('p_stock').value=p.stock;
+      document.getElementById('p_min').value=p.min;
+      document.getElementById('p_exp').value=p.exp || '';
+    }
+
+    function del(id){
+      const db = ERP.load();
+      db.products = db.products.filter(p=>p.id!==id);
+      ERP.save(db);
+      ERP.toast("Produto removido.");
+      render();
+    }
+
+    window.__editProduct = edit;
+    window.__deleteProduct = del;
+
+    function render(){
+      const db = ERP.load();
+      const q = (document.getElementById('productSearch').value || '').toLowerCase();
+      const rows = db.products
+        .filter(p => (`${p.sku} ${p.barcode} ${p.desc} ${p.cat}`.toLowerCase()).includes(q))
+        .map(p=>`
+          <tr>
+            <td><span class="tag">${p.sku}</span></td>
+            <td>${p.desc}<div class="muted" style="font-size:12px">${p.cat || '-'} • ${p.unit}</div></td>
+            <td class="right">${ERP.fmtBRL(p.price)}</td>
+            <td class="right">${p.stock}</td>
+            <td class="right">
+              <button class="btn" onclick="__editProduct('${p.id}')">Editar</button>
+              <button class="btn bad" onclick="__deleteProduct('${p.id}')">Excluir</button>
+            </td>
+          </tr>
+        `).join('');
+      document.getElementById('productsTable').innerHTML = rows || `<tr><td colspan="5" class="muted">Nenhum produto.</td></tr>`;
+    }
+
+    document.getElementById('btnSave').onclick = save;
+    document.getElementById('btnClear').onclick = clearForm;
+    document.getElementById('btnSuggest').onclick = suggestMock;
+    document.getElementById('productSearch').oninput = render;
+
+    document.getElementById('btnSeed').onclick = ()=> { ERP.seedIfEmpty(); ERP.toast("Exemplos carregados."); render(); };
+    document.getElementById('btnClearDB').onclick = ()=> {
+      if(confirm("Isso apaga produtos e vendas locais. Confirmar?")){
+        localStorage.removeItem("erp_mvp_db");
+        ERP.toast("Base local apagada.");
+        ERP.seedIfEmpty();
+        render();
+      }
+    };
+
+    render();
+  </script>
+</body>
+</html>

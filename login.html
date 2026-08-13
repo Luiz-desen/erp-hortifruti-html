@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login - ERP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap" style="max-width:520px; padding-top:60px;">
+    <div class="card">
+      <div class="row" style="align-items:center; justify-content:space-between;">
+        <div class="brand">
+          <div class="logo"></div>
+          <div>
+            <h1 style="margin:0; font-size:16px;">ERP Hortifruti/Mercearia</h1>
+            <small>Local • UF MG • MVP Front-end</small>
+          </div>
+        </div>
+        <span class="tag">Login</span>
+      </div>
+
+      <div style="margin-top:14px;">
+        <label>Usuário</label>
+        <input id="user" placeholder="admin" />
+      </div>
+      <div style="margin-top:10px;">
+        <label>Senha</label>
+        <input id="pass" type="password" placeholder="admin" />
+      </div>
+
+      <div class="row" style="margin-top:14px;">
+        <button class="btn ok" id="btnLogin">Entrar</button>
+        <button class="btn" id="btnDemo">Entrar (demo)</button>
+      </div>
+
+      <p class="muted" style="font-size:12px; margin-top:10px;">
+        No MVP: usuário/senha padrão <span class="tag">admin/admin</span>.
+        Depois você substitui por autenticação no Node.js + 2FA.
+      </p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+  <script>
+    function doLogin(u,p){
+      if((u||'').trim()==='admin' && (p||'').trim()==='admin'){
+        localStorage.setItem("erp_token","local-demo-token");
+        ERP.seedIfEmpty();
+        window.location.href="index.html";
+      } else {
+        ERP.toast("Usuário ou senha inválidos.");
+      }
+    }
+    document.getElementById('btnLogin').onclick = ()=> doLogin(
+      document.getElementById('user').value,
+      document.getElementById('pass').value
+    );
+    document.getElementById('btnDemo').onclick = ()=> doLogin('admin','admin');
+  </script>
+</body>
+</html>

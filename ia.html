@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Assistente IA - ERP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <script src="app.js"></script>
+  <script src="layout.js"></script>
+  <script>
+    renderLayout('ai');
+    const main = document.getElementById('main');
+
+    main.innerHTML = `
+      <h2>Assistente IA (GPT Maker)</h2>
+      <div class="card">
+        <div class="chat">
+          <div class="chatlog" id="chatlog">
+            <div class="msg ai">
+              <div class="meta">Assistente</div>
+              Posso ajudar com: estoque, preços, itens mais vendidos e resumos.
+              (No MVP, resposta é local/mock. Depois conecte no Node.js e GPT Maker.)
+            </div>
+          </div>
+          <div class="chatbar">
+            <input id="chatInput" placeholder="Ex: Tem banana? Qual o preço do tomate? Resumo de vendas de hoje..." />
+            <button class="btn ok" id="btnSend">Enviar</button>
+          </div>
+          <div class="muted" style="font-size:12px;">
+            Conexão futura: <span class="tag">POST http://localhost:3000/ai/chat</span> com query + contexto da loja (MG).
+          </div>
+        </div>
+      </div>
+    `;
+
+    function addMsg(kind, text){
+      const div = document.createElement('div');
+      div.className = `msg ${kind}`;
+      div.innerHTML = `<div class="meta">${kind==='user'?'Você':'Assistente'}</div>${text.replaceAll('<','&lt;')}`;
+      document.getElementById('chatlog').appendChild(div);
+      document.getElementById('chatlog').scrollTop = document.getElementById('chatlog').scrollHeight;
+    }
+
+    async function send(){
+      const input = document.getElementById('chatInput');
+      const q = input.value.trim();
+      if(!q) return;
+      input.value = '';
+      addMsg('user', q);
+
+      // MOCK local (trocar por fetch no Node.js)
+      const db = ERP.load();
+      const lq = q.toLowerCase();
+      let answer = "Ainda não estou conectado ao GPT Maker. ";
+      if(lq.includes("banana")){
+        const p = db.products.find(x=>x.desc.toLowerCase().includes("banana"));
+        answer = p ? `Banana: preço ${ERP.fmtBRL(p.price)} • estoque ${p.stock} ${p.unit}.` : "Não encontrei banana cadastrada.";
+      } else if(lq.includes("tomate")){
+        const p = db.products.find(x=>x.desc.toLowerCase().includes("tomate"));
+        answer = p ? `Tomate: preço ${ERP.fmtBRL(p.price)} • estoque ${p.stock} ${p.unit}.` : "Não encontrei tomate cadastrado.";
+      } else if(lq.includes("resumo") || lq.includes("vendas")){
+        const today = new Date().toISOString().slice(0,10);
+        const todays = db.sales.filter(s=>s.at.slice(0,10)===today);
+        const total = todays.reduce((a,s)=>a+s.total,0);
+        answer = `Hoje: ${todays.length} vendas • total ${ERP.fmtBRL(total)} • itens abaixo do mínimo: ${ERP.lowCount(db)}.`;
+      } else if(lq.includes("estoque mínimo") || lq.includes("estoque minimo")){
+        const lows = db.products.filter(p=>p.stock < p.min);
+        answer = lows.length ? `Abaixo do mínimo: ${lows.map(p=>`${p.sku} (${p.stock}/${p.min})`).join(', ')}` : "Nenhum item abaixo do mínimo.";
+      }
+      addMsg('ai', answer);
+    }
+
+    document.getElementById('btnSend').onclick = send;
+    document.getElementById('chatInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') send(); });
+  </script>
+</body>
+</html>

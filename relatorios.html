@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Relatórios - ERP</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <script src="app.js"></script>
+  <script src="layout.js"></script>
+  <script>
+    renderLayout('reports');
+    const main = document.getElementById('main');
+
+    main.innerHTML = `
+      <h2>Relatórios</h2>
+      <div class="card">
+        <div class="split">
+          <div class="card">
+            <h3>Produtos mais vendidos (simulado)</h3>
+            <table>
+              <thead><tr><th>Produto</th><th class="right">Qtd</th><th class="right">Receita</th></tr></thead>
+              <tbody id="topProducts"></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Margem (estimada)</h3>
+            <div class="muted" id="marginReport">Sem dados.</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    function render(){
+      const db = ERP.load();
+      const map = new Map();
+      for(const s of db.sales){
+        for(const it of s.items){
+          const k = it.desc;
+          const prev = map.get(k) || { qty:0, rev:0 };
+          prev.qty += it.qty;
+          prev.rev += it.qty*it.unit_price;
+          map.set(k, prev);
+        }
+      }
+      const arr = [...map.entries()].map(([desc,v])=>({desc, ...v}))
+        .sort((a,b)=>b.rev-a.rev).slice(0,10);
+
+      document.getElementById('topProducts').innerHTML =
+        arr.map(x=>`
+          <tr>
+            <td>${x.desc}</td>
+            <td class="right">${x.qty.toFixed(3)}</td>
+            <td class="right">${ERP.fmtBRL(x.rev)}</td>
+          </tr>
+        `).join('') || `<tr><td colspan="3" class="muted">Sem vendas.</td></tr>`;
+
+      let revenue=0, cost=0;
+      for(const s of db.sales){
+        for(const it of s.items){
+          const p = db.products.find(x=>x.id===it.product_id);
+          revenue += it.qty*it.unit_price;
+          cost += it.qty*(p? p.cost : 0);
+        }
+      }
+      if(revenue<=0){
+        document.getElementById('marginReport').textContent = "Sem dados.";
+      } else {
+        const margin = revenue - cost;
+        const pct = (margin/revenue)*100;
+        document.getElementById('marginReport').innerHTML = `
+          Receita: <strong>${ERP.fmtBRL(revenue)}</strong><br/>
+          Custo estimado: <strong>${ERP.fmtBRL(cost)}</strong><br/>
+          Margem estimada: <strong>${ERP.fmtBRL(margin)}</strong> (${pct.toFixed(1)}%)
+        `;
+      }
+    }
+    render();
+  </script>
+</body>
+</html>
